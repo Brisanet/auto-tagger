@@ -1,4 +1,8 @@
+import re
 import requests
+
+
+SEMVER_REGEX = re.compile(r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)$")
 
 
 class GitHubTagger:
@@ -6,8 +10,8 @@ class GitHubTagger:
         if not token:
             raise EnvironmentError("Variável de ambiente AUTO_TAG_TOKEN não definida")
 
-        self._owner = owner,
-        self._repo = repo,
+        self._owner = owner
+        self._repo = repo
         self._token = token
         self._api_url = f"https://api.github.com/repos/{owner}/{repo}"
         self._headers = {
@@ -18,49 +22,46 @@ class GitHubTagger:
         self.message = "Version updated by auto_tagger"
 
     def run(self):
-        last_req = -1
-        tag = 2
+        last_tag_info = self.get_last_tag_info()
+        last_tag = last_tag_info["ref"].split("/")[-1]
 
-        last_pr = self.get_last_pr_info()[last_req]
-        last_tag = last_pr.get('ref', "").split("/")[tag]
-        new_tag = self.increment_tag(last_tag)
-        last_object = last_pr.get('object', {}).get('sha', "")
-        last_type = last_pr.get('object', {}).get('type', "")
+        new_tag = self.increment_patch(last_tag)
 
-        if new_tag:
-            self.create_tag(new_tag, last_object, last_type)
-        else:
-            print("Tag atual inválida ou não segue padrão semântico.")
+        if not new_tag:
+            raise ValueError("Tag atual inválida ou não segue o padrão SemVer (vMAJOR.MINOR.PATCH)")
 
-    def get_last_pr_info(self):
+        obj_sha = last_tag_info["object"]["sha"]
+        obj_type = last_tag_info["object"]["type"]
+
+        self.create_tag(new_tag, obj_sha, obj_type)
+
+    def get_last_tag_info(self) -> dict:
         url = f"{self._api_url}/git/matching-refs/tags"
         response = requests.get(url, headers=self._headers)
         response.raise_for_status()
-        last_pr = response.json()
-        if not last_pr:
+
+        tags = response.json()
+        if not tags:
             raise ValueError("Nenhuma tag encontrada. Crie uma tag inicial, como v0.0.0")
-        return last_pr
 
-    def increment_tag(self, tag: str) -> str | None:
-        letter = "v"
-        if tag.startswith(letter) and tag.count(".") == 2:
-            major, minor, patch = map(int, tag[1:].split("."))
-            if patch == 9:
-                patch = 0
-                minor += 1
-                if minor > 9:
-                    minor = 0
-                    major += 1
-            else:
-                patch += 1
-            return f"{letter}{major}.{minor}.{patch}"
-        return None
+        return tags[-1]
 
-    def create_tag(self, tag: str, last_obj: str, obj_type: str):
+    def increment_patch(self, tag: str) -> str | None:
+        match = SEMVER_REGEX.match(tag)
+        if not match:
+            return None
+
+        major = int(match.group("major"))
+        minor = int(match.group("minor"))
+        patch = int(match.group("patch")) + 1
+
+        return f"v{major}.{minor}.{patch}"
+
+    def create_tag(self, tag: str, obj_sha: str, obj_type: str):
         tag_body = {
             "tag": tag,
             "message": self.message,
-            "object": last_obj,
+            "object": obj_sha,
             "type": obj_type,
         }
 
@@ -71,8 +72,9 @@ class GitHubTagger:
 
         ref_body = {
             "ref": f"refs/tags/{tag}",
-            "sha": tag_data["sha"]
+            "sha": tag_data["sha"],
         }
+
         ref_url = f"{self._api_url}/git/refs"
         ref_resp = requests.post(ref_url, headers=self._headers, json=ref_body)
         ref_resp.raise_for_status()
