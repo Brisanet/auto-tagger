@@ -5,6 +5,8 @@ Ao fazer pull request, é preciso subir uma tag, e a tag pode ser uma trigger pa
 geralmente ocorre de forma manual, mas com o auto-tagger é feito de forma automatizada via Python <br> 
 junto à API do GitHub. A tag deve seguir o padrão v0.0.0. Major, minor, patch. <br><br>
 
+# Importante
+É necessário liberar a permissão para o PAT de Contents (read e write).
 
 > Para utilizar o auto-tagger deve haver uma tag já criada anteriormente, pode ser qualquer versão, se não tiver, crie a **v0.0.0**. <br>
 
