@@ -30,10 +30,9 @@ class GitHubTagger:
         if not new_tag:
             raise ValueError("Tag atual inválida ou não segue o padrão SemVer (vMAJOR.MINOR.PATCH)")
 
-        obj_sha = last_tag_info["object"]["sha"]
-        obj_type = last_tag_info["object"]["type"]
+        head_sha = self.get_default_branch_head()
 
-        self.create_tag(new_tag, obj_sha, obj_type)
+        self.create_tag(new_tag, head_sha, "commit")
 
     def get_last_tag_info(self) -> dict:
         url = f"{self._api_url}/git/matching-refs/tags"
@@ -41,10 +40,29 @@ class GitHubTagger:
         response.raise_for_status()
 
         tags = response.json()
-        if not tags:
+        semver_tags = [tag for tag in tags if SEMVER_REGEX.match(tag["ref"].split("/")[-1])]
+        if not semver_tags:
             raise ValueError("Nenhuma tag encontrada. Crie uma tag inicial, como v0.0.0")
 
-        return tags[-1]
+        # A API retorna as refs em ordem alfabética (v1.0.10 vem antes de v1.0.9),
+        # então a última tag precisa ser resolvida comparando os números da versão
+        return max(semver_tags, key=self._semver_key)
+
+    @staticmethod
+    def _semver_key(tag_info: dict) -> tuple[int, int, int]:
+        match = SEMVER_REGEX.match(tag_info["ref"].split("/")[-1])
+        return (int(match.group("major")), int(match.group("minor")), int(match.group("patch")))
+
+    def get_default_branch_head(self) -> str:
+        repo_resp = requests.get(self._api_url, headers=self._headers)
+        repo_resp.raise_for_status()
+        default_branch = repo_resp.json()["default_branch"]
+
+        ref_url = f"{self._api_url}/git/ref/heads/{default_branch}"
+        ref_resp = requests.get(ref_url, headers=self._headers)
+        ref_resp.raise_for_status()
+
+        return ref_resp.json()["object"]["sha"]
 
     def increment_patch(self, tag: str) -> str | None:
         match = SEMVER_REGEX.match(tag)
