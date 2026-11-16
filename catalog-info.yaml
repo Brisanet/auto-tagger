@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: auto-tagger
+  title: auto-tagger
+  description: "Auto-tag é uma implementação feita em Python para automatização de tags no GitHub. <br><br> Exemplo clássico: <br><br> Ao fazer pull request, é preciso subir uma tag, e a tag pode ser uma trigger para gerar uma nova att, <br> geralmente ocorre de forma manual, mas com o auto-tagger é feito de forma "
+  annotations:
+    github.com/project-slug: Brisanet/auto-tagger
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/TODO-DEFINIR
